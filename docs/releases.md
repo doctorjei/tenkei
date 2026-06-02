@@ -159,6 +159,27 @@ a test host (e.g. PVE droste box for VM smoke testing).
 Expect ~25-30 min on a cold kernel cache for the rc build; the
 promote step is ~1-2 min (skopeo copy + draft edit, no rebuild).
 
+## Downstream notification
+
+The `promote` job's final step fires a `repository_dispatch` at
+[`doctorjei/droste`](https://github.com/doctorjei/droste) with
+`event_type=gemet-release` and `client_payload.tag=<the release tag>`.
+Droste's workflow listens for that event and opens a pin-bump PR
+against its own `main` (manual review on green CI — no auto-merge).
+
+Activation: this step is conditional on a `DROSTE_DISPATCH_TOKEN`
+secret being present under the repo's Actions secrets. The PAT
+must be fine-grained, scoped to `doctorjei/droste` only, with
+**Contents: Read and write** (for the PR branch droste opens) and
+**Actions: Read and write** (dispatch permission). When the secret
+is absent the step logs a `::warning ::` and no-ops; the release
+itself still publishes. The step also runs with
+`continue-on-error: true`, so a transient network or auth failure
+during dispatch can't block the release either.
+
+Only plain release tags (`v<ver>`) trigger the dispatch — rc tags
+route through the `build-and-rc` job and never reach `promote`.
+
 ## Testing the pipeline without publishing
 
 The release workflow also accepts `workflow_dispatch`. Running it via

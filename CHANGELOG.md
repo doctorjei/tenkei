@@ -4,6 +4,16 @@ All notable changes to Gemet are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); Gemet
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Release pipeline notifies droste of new releases via
+  `repository_dispatch` (`event_type=gemet-release`, `client_payload.tag`).
+  Final step of the `promote` job; activates when the
+  `DROSTE_DISPATCH_TOKEN` secret is configured under repo Secrets.
+  Warn-only — a missing secret or transient dispatch failure does
+  not block the release.
+
 ## [1.6.2] — 2026-04-29
 
 ### Fixed

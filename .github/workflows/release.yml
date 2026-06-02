@@ -692,3 +692,33 @@ jobs:
             --title "$TAG" \
             --draft=false
           echo "Promoted draft release ${RC_TAG} -> published ${TAG}"
+
+      - name: Notify droste of new release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.DROSTE_DISPATCH_TOKEN }}
+          TAG: ${{ steps.shape.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Fires a repository_dispatch at doctorjei/droste so droste can
+          # open a pin-bump PR on every gemet release. Warn-only: a missing
+          # secret (rollout / rotation) or transient network/auth failure
+          # must not block the release itself. The step has
+          # continue-on-error: true at the YAML level (absorbs runtime
+          # failures) AND an in-script guard for the unset-secret case so
+          # that path logs a clear `::warning ::` rather than an opaque
+          # auth-failure noise line.
+          #
+          # rc tags never reach this step — the promote job is gated by
+          # `!contains(github.ref_name, '-rc')` at the job level. Plain
+          # release tags only.
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::warning ::DROSTE_DISPATCH_TOKEN secret not configured — skipping droste notification (configure under repo Secrets to enable)"
+            exit 0
+          fi
+          echo "Dispatching gemet-release event to droste (tag=$TAG)"
+          gh api repos/doctorjei/droste/dispatches \
+            -f event_type=gemet-release \
+            -f "client_payload[tag]=$TAG"
+          echo "droste dispatch sent for $TAG"
