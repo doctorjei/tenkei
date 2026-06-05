@@ -9,16 +9,22 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - KVM host support in the x86_64 kernel config overlay
   (`kernel/config/x86_64/gemet.conf`): `CONFIG_VIRTUALIZATION=y`,
-  `CONFIG_KVM=y`, `CONFIG_KVM_INTEL=m`, `CONFIG_KVM_AMD=m`. Kata's
+  `CONFIG_KVM=y`, `CONFIG_KVM_INTEL=y`, `CONFIG_KVM_AMD=y`. Kata's
   guest kernel ships `CONFIG_KVM_GUEST=y` but omits the host drivers
   that create `/dev/kvm`; gemet's droste-stuffinator tier boots this
   kernel as a nested-virt PVE node (kento's pve-vm E2E mode), which
-  needs the host half. Modules (`=m`) keep the base image lean —
-  loaded only on a virt-capable host.
-- `CONFIG_BLK_DEV_NBD=m` and `CONFIG_BLK_DEV_DRBD=m` in the same
-  overlay. Droste autoloads `nbd`/`drbd` via `modules-load.d` for its
-  HA/storage tiers; Kata's allnoconfig base omitted them, making those
-  autoloads silent no-ops.
+  needs the host half. Built in (`=y`), not modules: gemet ships only
+  `vmlinuz` + initramfs (no `/lib/modules` tree), so a module driver
+  would never reach a consumer.
+- `CONFIG_BLK_DEV_NBD=y`, `CONFIG_BLK_DEV_DRBD=y`, and
+  `CONFIG_CONNECTOR=y` (DRBD dependency) in the same overlay. Droste
+  autoloads `nbd`/`drbd` via `modules-load.d` for its HA/storage
+  tiers; Kata's allnoconfig base omitted them, making those autoloads
+  silent no-ops. Built in for the same no-modules-shipped reason.
+- `scripts/build-kernel.sh` now asserts every overlay `CONFIG_*=` line
+  survived `make olddefconfig`, failing the build if a symbol was
+  dropped (unmet dependency or renamed). `merge_config.sh -m` skips
+  its own validation, so this closes a silent-drop blind spot.
 - Release pipeline notifies droste of new releases via
   `repository_dispatch` (`event_type=gemet-release`, `client_payload.tag`).
   Final step of the `promote` job; activates when the

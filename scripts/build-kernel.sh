@@ -142,6 +142,20 @@ apply_gemet_overlay() {
             bash scripts/kconfig/merge_config.sh -m .config "$gemet_frag"
             make olddefconfig
         )
+        # merge_config.sh -m (merge-only mode) skips its final validation,
+        # and `make olddefconfig` silently drops any symbol whose deps are
+        # unmet. Assert every CONFIG_*= line from the overlay survived into
+        # the final .config so a dropped or renamed symbol fails the build
+        # loudly instead of silently shipping a kernel missing the opinion.
+        local missing=0 cfgline
+        while IFS= read -r cfgline; do
+            [[ "$cfgline" =~ ^CONFIG_[A-Z0-9_]+=. ]] || continue
+            grep -qxF "$cfgline" "${kernel_path}/.config" \
+                || { echo "ERROR: gemet overlay symbol dropped from final .config: $cfgline" >&2; missing=1; }
+        done < "$gemet_frag"
+        [[ "$missing" -eq 0 ]] || error \
+            "gemet kernel overlay symbols were dropped by olddefconfig (unmet deps or renamed symbol)." \
+            "Inspect kernel/config/${karch}/gemet.conf and add the missing dependency, or correct the symbol name."
     else
         info "No gemet fragment for arch=${karch}; using Kata config as-is"
     fi
