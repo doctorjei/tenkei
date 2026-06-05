@@ -4,9 +4,21 @@ All notable changes to Gemet are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); Gemet
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.7.0] — 2026-06-05
 
 ### Added
+- KVM host support in the x86_64 kernel config overlay
+  (`kernel/config/x86_64/gemet.conf`): `CONFIG_VIRTUALIZATION=y`,
+  `CONFIG_KVM=y`, `CONFIG_KVM_INTEL=m`, `CONFIG_KVM_AMD=m`. Kata's
+  guest kernel ships `CONFIG_KVM_GUEST=y` but omits the host drivers
+  that create `/dev/kvm`; gemet's droste-stuffinator tier boots this
+  kernel as a nested-virt PVE node (kento's pve-vm E2E mode), which
+  needs the host half. Modules (`=m`) keep the base image lean —
+  loaded only on a virt-capable host.
+- `CONFIG_BLK_DEV_NBD=m` and `CONFIG_BLK_DEV_DRBD=m` in the same
+  overlay. Droste autoloads `nbd`/`drbd` via `modules-load.d` for its
+  HA/storage tiers; Kata's allnoconfig base omitted them, making those
+  autoloads silent no-ops.
 - Release pipeline notifies droste of new releases via
   `repository_dispatch` (`event_type=gemet-release`, `client_payload.tag`).
   Final step of the `promote` job; activates when the
