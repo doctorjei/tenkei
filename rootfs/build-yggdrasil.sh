@@ -550,13 +550,15 @@ apt-get purge -y --allow-remove-essential \$SWAP_LIST dash 2>&1 \
 apt-get autoremove --purge -y || true
 
 # Canonical-inversion: fill in any remaining empty busybox applet paths.
+# busybox --install -s lays applets out flat in the stage dir, so each
+# entry maps to /usr/bin/<applet> (on PATH; /usr/bin always exists). The
+# [ -e ] guard then correctly skips applets already shimmed there.
 BB_STAGE=\$(busybox mktemp -d /tmp/bb-stage.XXXXXX)
 busybox --install -s "\$BB_STAGE"
 : > /tmp/bb-extra-shims.txt
 (cd "\$BB_STAGE" && busybox find . -type l) | while read -r rel; do
-    target="/\${rel#./}"
+    target="/usr/bin/\$(busybox basename "\$rel")"
     [ -e "\$target" ] && continue
-    busybox install -d "\$(dirname "\$target")"
     ln -sf /usr/bin/busybox "\$target"
     echo "\$target" >> /tmp/bb-extra-shims.txt
 done

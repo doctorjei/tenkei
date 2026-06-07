@@ -4,7 +4,17 @@ All notable changes to Gemet are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); Gemet
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.7.0] — 2026-06-05
+## [1.7.0] — 2026-06-07
+
+### Fixed
+- busybox canonical-inversion fill-in shims now land in
+  `/usr/bin/<applet>` instead of the rootfs root. `build-yggdrasil.sh`
+  laid the busybox applet stage out flat and mapped each entry to
+  `/<applet>`, so shims for otherwise-unshimmed applets were created at
+  `/` (off `PATH`) and the `[ -e ]` dedup almost never matched.
+  Harmless clutter for yggdrasil/bifrost (canonical tools already live
+  in `/usr/bin`); for canopy it left busybox-only applets unreachable.
+  The dedup now correctly skips applets already shimmed in `/usr/bin`.
 
 ### Added
 - KVM host support in the x86_64 kernel config overlay
