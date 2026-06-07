@@ -110,18 +110,57 @@ Kata's `setup` step to merge Kata's fragments, then layers
 `kernel/config/<arch>/gemet.conf` on top via `merge_config.sh -m` and a
 final `make olddefconfig` before the build proceeds.
 
-Currently the overlay sets a single option:
+The overlay now sets several gemet-specific options, grouped by purpose:
 
 ```
+# ACPI power-button delivery (PVE qm shutdown over QMP)
 CONFIG_INPUT_EVDEV=y
+
+# KVM host: nested-virt /dev/kvm for droste's PVE-node tier
+CONFIG_VIRTUALIZATION=y
+CONFIG_KVM=y
+CONFIG_KVM_INTEL=y
+CONFIG_KVM_AMD=y
+
+# Block drivers for droste's HA/storage tiers (CONNECTOR is a DRBD dep)
+CONFIG_CONNECTOR=y
+CONFIG_BLK_DEV_NBD=y
+CONFIG_BLK_DEV_DRBD=y
+
+# LSM: AppArmor is the active MAC; SELinux stays compiled but dormant
+CONFIG_AUDIT=y
+CONFIG_SECURITY_APPARMOR=y
+CONFIG_LSM="landlock,lockdown,yama,loadpin,safesetid,integrity,apparmor"
 ```
 
-This exists because Kata's target use case (kata-agent over vsock)
-doesn't need userspace ACPI event delivery, so their fragments leave
-`CONFIG_INPUT_EVDEV` unset. Gemet's consumers (e.g. PVE `qm shutdown`,
-which sends an ACPI power-button press over QMP) need `/dev/input/event*`
-to exist so `systemd-logind` can react — without it, ACPI events are
-dropped and the host falls back to forceStop after a timeout.
+`CONFIG_INPUT_EVDEV` exists because Kata's target use case (kata-agent
+over vsock) doesn't need userspace ACPI event delivery, so their fragments
+leave it unset. Gemet's consumers (e.g. PVE `qm shutdown`, which sends an
+ACPI power-button press over QMP) need `/dev/input/event*` to exist so
+`systemd-logind` can react — without it ACPI events are dropped and the
+host falls back to forceStop after a timeout.
+
+The KVM host group gives gemet the hypervisor-side drivers that create
+`/dev/kvm`. Kata ships `CONFIG_KVM_GUEST=y` (paravirt-as-guest) but omits
+the host half; droste boots this kernel as a nested-virt PVE node, which
+needs both.
+
+The block group covers `nbd`/`drbd`, which droste autoloads via
+`modules-load.d` for its HA/storage tiers; Kata's allnoconfig base omitted
+them. `CONFIG_CONNECTOR` is the explicit DRBD dependency.
+
+The LSM group makes AppArmor the active major MAC. Kata compiles SELinux
+in with no explicit `CONFIG_LSM`, so the kernel default put SELinux ahead
+of AppArmor; with no policy shipped it errored on every boot while AppArmor
+never initialized. Setting `CONFIG_LSM` with apparmor as the only major
+makes AppArmor active and keeps SELinux dormant-but-re-enablable at boot.
+
+All overlay options are builtin (`=y`), never modules: gemet ships only
+`vmlinuz` + initramfs (`kernel/Containerfile` is `FROM scratch` + COPY of
+the two boot files; the build has no `make modules_install` and no
+`/lib/modules` tree). A `=m` driver would compile but never reach a
+consumer. `scripts/build-kernel.sh` asserts every overlay `CONFIG_*=` line
+survived `make olddefconfig` and fails the build if any was dropped.
 
 Practical consequence: gemet's `vmlinuz` is binary-compatible with the
 boot interface Kata exposes (same kernel version, same Kata configs and

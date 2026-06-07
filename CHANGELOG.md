@@ -4,6 +4,23 @@ All notable changes to Gemet are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); Gemet
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.2] — 2026-06-07
+
+### Fixed
+- Kernel LSM stack: AppArmor is now the active major MAC and the kernel no
+  longer logs `SELinux: Could not open policy file` on every boot. The x86_64
+  overlay (`kernel/config/x86_64/gemet.conf`) sets `CONFIG_SECURITY_APPARMOR=y`,
+  `CONFIG_AUDIT=y`, and
+  `CONFIG_LSM="landlock,lockdown,yama,loadpin,safesetid,integrity,apparmor"`.
+  Previously gemet inherited Kata's config (SELinux `=y`, no explicit
+  `CONFIG_LSM`), so the kernel-default order made SELinux the active major;
+  with no policy shipped it errored on every boot while AppArmor never
+  initialized, leaving the guest with no working MAC. AppArmor loads with no
+  policies by design (yggdrasil strips the apparmor userspace), so it is
+  available-but-inert until a downstream reinstalls the apparmor package.
+  SELinux stays compiled and re-enablable at boot via `lsm=…,selinux` or
+  `selinux=1`.
+
 ## [1.7.1] — 2026-06-07
 
 ### Fixed
