@@ -275,9 +275,10 @@ Tagged releases (`v*`) are built automatically by
   `github.com/doctorjei/gemet/releases` — `vmlinuz`,
   `gemet-initramfs.img`, `{yggdrasil,bifrost,canopy}-<ver>.{txz,qcow2}`
   (rootfs tarballs are xz-compressed with the canonical `.txz`
-  extension; build scripts emit `.txz` locally too), and xz-compressed
-  OCI archives (`-oci.txz`) for all three rootfs images plus
-  `gemet-boot-<ver>-oci.txz` for the kernel.
+  extension; build scripts emit `.txz` locally too), and plain-tar
+  OCI archives (`-oci.tar`) for all three rootfs images plus
+  `gemet-boot-<ver>-oci.tar` for the kernel (layer blobs are already
+  gzip-compressed, so the archive isn't re-compressed).
 - **OCI images on GHCR** —
   `ghcr.io/doctorjei/gemet/{yggdrasil,bifrost,canopy,boot}:<ver>`
   (all also tagged `:latest`). The kernel image publishes as `boot`;
