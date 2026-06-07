@@ -7,6 +7,11 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- `scripts/kernel-selftest.sh`: boots a composed gemet image as a nested VM via
+  kento on a KVM-capable host and asserts the shipped kernel-config opinions
+  (/dev/kvm, nbd/drbd, AppArmor-active LSM with no SELinux policy error, evdev,
+  clean boot). Lets gemet validate its own kernel opinions instead of relying on
+  a downstream or a manual VM.
 - Promote job now enforces a digest-equality gate: each variant's `:<ver>`
   and `:latest` top-level digest must equal the source `:<ver>-rc<n>` digest,
   or the promote fails. Codifies the copy-only bit-identical guarantee that was
