@@ -246,7 +246,7 @@ RUN > /etc/fstab \
     && echo 'root:password' | chpasswd \
     && apt-get update && apt-get install -y udev systemd-sysv \
     && mkdir -p /etc/systemd/network \
-    && printf '[Match]\nType=ether\n\n[Network]\nDHCP=yes\n' \
+    && printf '[Match]\nName=en* eth*\n\n[Network]\nDHCP=yes\n' \
        > /etc/systemd/network/80-dhcp.network \
     && systemctl enable systemd-networkd
 ```
@@ -255,7 +255,12 @@ Key requirements for a VM-bootable image:
 - `/boot/vmlinuz` and `/boot/initramfs.img` present
 - Empty `/etc/fstab` (stale entries from base images hang on boot)
 - A user account with a password set (locked accounts can't login via console)
-- systemd-networkd with a DHCP `.network` file for virtio NICs
+- systemd-networkd with a DHCP `.network` file for virtio NICs. The
+  match is narrowed to `Name=en* eth*` (primary NICs) rather than
+  `Type=ether` so it never claims LXC/bridge veth interfaces. The gemet
+  base images additionally ship a `10-lxc-veth-unmanaged.network`
+  drop-in (`[Match] Kind=veth` / `[Link] Unmanaged=yes`) as a
+  belt-and-braces guard when the image is used as an LXC host.
 - `udev` and `systemd-sysv` installed for full systemd boot
 
 ## Kernel as OCI image

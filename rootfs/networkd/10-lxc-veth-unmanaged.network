@@ -1,0 +1,9 @@
+# Keep systemd-networkd from claiming LXC/bridge veth interfaces.
+# 80-dhcp.network's NIC match must never reach a veth; this is a
+# belt-and-braces guard so networkd never strips a veth off its
+# bridge when a gemet image is used as an LXC host.
+[Match]
+Kind=veth
+
+[Link]
+Unmanaged=yes

@@ -4,6 +4,11 @@ All notable changes to Gemet are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); Gemet
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] — 2026-06-07
+
+### Fixed
+- networkd no longer claims LXC/bridge veth interfaces: narrowed 80-dhcp.network's match from Type=ether to Name=en* eth* and added a 10-lxc-veth-unmanaged.network drop-in. Fixes silent loss of bridge membership when a gemet image is used as an LXC host (yggdrasil/bifrost/canopy).
+
 ## [1.7.0] — 2026-06-07
 
 ### Fixed

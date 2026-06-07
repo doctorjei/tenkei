@@ -56,7 +56,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_DIR="$REPO_ROOT/build"
 DOWNLOAD_DIR="$BUILD_DIR/download"
 SEED_TARGET="$REPO_ROOT/rootfs/seed-target.txt"
-NETWORKD_CONF="$REPO_ROOT/rootfs/networkd/80-dhcp.network"
+NETWORKD_DIR="$REPO_ROOT/rootfs/networkd"
 UNSHIM_SCRIPT="$REPO_ROOT/rootfs/yggdrasil-unshim.sh"
 REHYDRATE_SCRIPT="$REPO_ROOT/rootfs/yggdrasil-rehydrate.sh"
 VERSION_FILE="$REPO_ROOT/VERSION"
@@ -185,7 +185,7 @@ if $DO_QCOW2; then
 fi
 
 [[ -f "$SEED_TARGET"   ]] || error "seed target list not found: $SEED_TARGET"
-[[ -f "$NETWORKD_CONF" ]] || error "networkd config not found: $NETWORKD_CONF"
+[[ -d "$NETWORKD_DIR" ]] || error "networkd config dir not found: $NETWORKD_DIR"
 
 detect_container_cmd() {
     if command -v podman &>/dev/null; then
@@ -305,7 +305,8 @@ printf '%s\n' "${PHASE2_PURGE_PACKAGES[@]}"    > "$SCRATCH/phase2-purge-list.txt
 printf '%s\n' "${PHASE4_PURGE_PACKAGES[@]}"    > "$SCRATCH/phase4-purge-list.txt"
 printf '%s\n' "${EXTRA_INSTALL_PACKAGES[@]}"   > "$SCRATCH/extra-install-list.txt"
 grep -v '^#' "$SEED_TARGET" | grep -v '^$'     > "$SCRATCH/seed-keep.txt"
-cp "$NETWORKD_CONF"                              "$SCRATCH/80-dhcp.network"
+mkdir -p "$SCRATCH/networkd"
+cp "$NETWORKD_DIR"/*.network                    "$SCRATCH/networkd/"
 
 RECOVERY_STAGED=false
 if [[ -f "$UNSHIM_SCRIPT" ]] && [[ -f "$REHYDRATE_SCRIPT" ]]; then
@@ -611,9 +612,12 @@ info "Running package strip in chroot..."
 chroot "\$WORK_DIR" /tmp/strip.sh
 
 # ── Stage networkd + recovery tooling ───────────────────────────────
-info "Staging networkd DHCP config..."
-install -D -m 0644 "\$SCRATCH/80-dhcp.network" \
-    "\$WORK_DIR/etc/systemd/network/80-dhcp.network"
+info "Staging networkd config..."
+install -d -m 0755 "\$WORK_DIR/etc/systemd/network"
+for netconf in "\$SCRATCH"/networkd/*.network; do
+    install -D -m 0644 "\$netconf" \
+        "\$WORK_DIR/etc/systemd/network/\$(basename "\$netconf")"
+done
 
 if \$RECOVERY_STAGED; then
     info "Staging recovery scripts..."
