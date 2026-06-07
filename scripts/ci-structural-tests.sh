@@ -279,8 +279,20 @@ else
             fi
         fi
 
+        # No loose busybox applet shims at the rootfs root. The
+        # canonical-inversion fill-in must target /usr/bin/<applet>; a
+        # symlink to busybox directly under / means the pre-1.7.0 bug
+        # (applets laid at the rootfs root, off PATH) has regressed.
+        # Legit merged-usr root symlinks (/bin, /sbin, /lib, ...) point
+        # to usr/* directories, so -lname '*busybox' excludes them.
+        loose=$(find "$YGG_ROOT" -maxdepth 1 -type l -lname '*busybox' \
+            -printf '%f ' 2>/dev/null || true)
+        if [[ -n "${loose// /}" ]]; then
+            bad+=" loose-busybox-shims-at-root:${loose// /,}"
+        fi
+
         if [[ -z "$bad" ]]; then
-            pass "yggdrasil OCI structure OK (init, python3, systemd units, dpkg clean: $pkgs pkgs)"
+            pass "yggdrasil OCI structure OK (init, python3, systemd units, no loose root shims, dpkg clean: $pkgs pkgs)"
         else
             fail "yggdrasil OCI issues:$bad"
         fi
