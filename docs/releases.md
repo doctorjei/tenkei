@@ -28,22 +28,22 @@ Attached to the release page at `github.com/doctorjei/gemet/releases/tag/v<ver>`
 | `gemet-initramfs.img`              | ~1.1 MB  | gzip+cpio initramfs (busybox + virtiofs-aware init script).          |
 | `yggdrasil-<ver>.txz`              |  ~57 MB  | Yggdrasil rootfs tarball (xz-compressed).                            |
 | `yggdrasil-<ver>.qcow2`            |  ~87 MB  | Bootable partition-less ext4 disk image for `qemu -drive`.           |
-| `yggdrasil-<ver>-oci.txz`          |  ~60 MB  | OCI archive of the Yggdrasil image (air-gapped `podman load`, xz-compressed). |
+| `yggdrasil-<ver>-oci.tar`          |  ~60 MB  | Plain tar of the Yggdrasil OCI image (layer blobs are already gzip-compressed; air-gapped `podman load`). |
 | `bifrost-<ver>.txz`                |  ~57 MB  | Bifrost (SSH-ready) rootfs tarball.                                  |
 | `bifrost-<ver>.qcow2`              |  ~87 MB  | Bootable Bifrost disk image.                                         |
-| `bifrost-<ver>-oci.txz`            |  ~60 MB  | OCI archive of the Bifrost image (xz-compressed).                    |
+| `bifrost-<ver>-oci.tar`            |  ~60 MB  | Plain tar of the Bifrost OCI image (layer blobs already gzip-compressed). |
 | `canopy-<ver>.txz`                 |  ~46 MB  | Canopy (no-init) rootfs tarball. Not independently bootable.         |
 | `canopy-<ver>.qcow2`               |  ~71 MB  | Canopy disk image (composition base — no pid1).                      |
-| `canopy-<ver>-oci.txz`             |  ~49 MB  | OCI archive of the Canopy image (xz-compressed).                     |
-| `gemet-boot-<ver>-oci.txz`         |  ~7 MB   | OCI archive of the kernel-only image (multi-stage `COPY --from=`, xz-compressed). |
+| `canopy-<ver>-oci.tar`             |  ~49 MB  | Plain tar of the Canopy OCI image (layer blobs already gzip-compressed). |
+| `gemet-boot-<ver>-oci.tar`         |  ~7 MB   | Plain tar of the kernel-only OCI image (multi-stage `COPY --from=`; layer blobs already gzip-compressed). |
 
 Rootfs archives are published as `.txz` (same xz format, canonical
 shorter extension — `.tar.xz` through v1.4.1, renamed on the release
 page at v1.4.2, and renamed at the build-script layer thereafter).
-OCI-archive release attachments are xz-compressed on the release page
-as `-oci.txz` — GHCR push format (uncompressed OCI, served by the
-registry) is unchanged. `podman load` accepts the xz-compressed form
-natively.
+OCI-archive release attachments ship as a plain `-oci.tar` — their
+layer blobs are already `tar+gzip`, so an extra xz pass costs CI time
+for negligible size gain. GHCR push format (served by the registry) is
+unchanged. `podman load` accepts the `.tar` directly.
 
 ### OCI images on GHCR
 
@@ -64,7 +64,7 @@ and remain pullable at their original tags. The kernel package renamed
 from `tenkei-kernel` to `boot` with the namespace switch.
 Release-attachment filenames also rename at 1.5.1 —
 `tenkei-initramfs.img` → `gemet-initramfs.img` and
-`tenkei-kernel-<ver>-oci.txz` → `gemet-boot-<ver>-oci.txz`. Image
+`tenkei-kernel-<ver>-oci.txz` → `gemet-boot-<ver>-oci.tar`. Image
 internals (scripts, labels, variable names inside the rootfs) still
 carry the `tenkei` prefix; the full internal rename lands in v2.0.0.
 

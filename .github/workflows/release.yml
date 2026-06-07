@@ -426,36 +426,6 @@ jobs:
             "ghcr.io/doctorjei/gemet/boot:${RC_VERSION}"
           podman push "ghcr.io/doctorjei/gemet/boot:${RC_VERSION}"
 
-      - name: Compress OCI archives for release attachment (on rc tag)
-        if: steps.shape.outputs.is_rc == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.ver.outputs.version }}"
-          # xz-compress per-variant OCI archives for release-page upload
-          # only. GHCR push uses `podman tag`/`podman push` against the
-          # in-podman image (not the saved .tar), and the Tier 1/2 test
-          # steps consume the uncompressed `-oci.tar` directly, so we
-          # keep the `.tar` sources intact and emit a `.txz` sibling
-          # strictly as a release attachment. Matches the .txz rename
-          # shipped for the per-variant rootfs tarballs.
-          for a in \
-            "build/yggdrasil-${VERSION}-oci.tar" \
-            "build/bifrost-${VERSION}-oci.tar" \
-            "build/canopy-${VERSION}-oci.tar" \
-            "build/gemet-boot-${VERSION}-oci.tar"
-          do
-            [[ -f "$a" ]] || { echo "ERROR: missing $a"; exit 1; }
-            # -k keeps the original .tar in place for intra-workflow use.
-            # -T0 uses all available cores; -9 for maximum xz ratio.
-            xz -k -T0 -9 -c "$a" > "${a%.tar}.txz"
-          done
-          ls -l \
-            "build/yggdrasil-${VERSION}-oci.txz" \
-            "build/bifrost-${VERSION}-oci.txz" \
-            "build/canopy-${VERSION}-oci.txz" \
-            "build/gemet-boot-${VERSION}-oci.txz"
-
       - name: Create DRAFT GitHub Release for rc (on rc tag)
         if: steps.shape.outputs.is_rc == 'true'
         shell: bash
@@ -475,14 +445,14 @@ jobs:
             "build/gemet-initramfs.img"
             "build/yggdrasil-${VERSION}.txz"
             "build/yggdrasil-${VERSION}.qcow2"
-            "build/yggdrasil-${VERSION}-oci.txz"
+            "build/yggdrasil-${VERSION}-oci.tar"
             "build/bifrost-${VERSION}.txz"
             "build/bifrost-${VERSION}.qcow2"
-            "build/bifrost-${VERSION}-oci.txz"
+            "build/bifrost-${VERSION}-oci.tar"
             "build/canopy-${VERSION}.txz"
             "build/canopy-${VERSION}.qcow2"
-            "build/canopy-${VERSION}-oci.txz"
-            "build/gemet-boot-${VERSION}-oci.txz"
+            "build/canopy-${VERSION}-oci.tar"
+            "build/gemet-boot-${VERSION}-oci.tar"
           )
           for a in "${ASSETS[@]}"; do
             [[ -f "$a" ]] || { echo "ERROR: missing release asset: $a"; exit 1; }
@@ -672,6 +642,39 @@ jobs:
               --src-creds "$CREDS" --dest-creds "$CREDS" \
               "$SRC" "$DST_LATEST"
           done
+
+      - name: Assert promoted images are bit-identical to rc (digest gate)
+        shell: bash
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.shape.outputs.version }}"
+          RC_VERSION="${{ steps.rc.outputs.rc_version }}"
+          # The promote copy must be bit-identical: each variant's :<ver> and
+          # :latest top-level digest must equal the source :<ver>-rc<n> digest.
+          # skopeo copy --all copies the manifest+blobs verbatim, so this holds.
+          # If a future copy method ever changed the digest (e.g. buildx
+          # imagetools, which wraps a single-arch image in a new index), this
+          # gate fails the promote loudly instead of silently shipping a
+          # different artifact. Replaces the manual post-promote digest check.
+          CREDS="${GHCR_USER}:${GHCR_TOKEN}"
+          fail=0
+          for variant in yggdrasil bifrost canopy boot; do
+            base="docker://ghcr.io/doctorjei/gemet/${variant}"
+            src="$(skopeo inspect --creds "$CREDS" --format '{{.Digest}}' "${base}:${RC_VERSION}")"
+            ver="$(skopeo inspect --creds "$CREDS" --format '{{.Digest}}' "${base}:${VERSION}")"
+            lat="$(skopeo inspect --creds "$CREDS" --format '{{.Digest}}' "${base}:latest")"
+            echo "── ${variant}: rc=${src} ver=${ver} latest=${lat}"
+            if [[ "$src" != "$ver" || "$src" != "$lat" ]]; then
+              echo "ERROR: ${variant} promote not bit-identical: rc=${src} ver=${ver} latest=${lat}" >&2
+              fail=1
+            fi
+          done
+          [[ "$fail" -eq 0 ]] \
+            || { echo "Promote digest gate FAILED — images are not copy-only bit-identical" >&2; exit 1; }
+          echo "Digest gate passed: all variants bit-identical across rc / ${VERSION} / latest."
 
       - name: Promote draft rc release to published v<ver>
         shell: bash

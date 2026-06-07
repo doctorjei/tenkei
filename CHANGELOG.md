@@ -4,6 +4,23 @@ All notable changes to Gemet are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); Gemet
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Promote job now enforces a digest-equality gate: each variant's `:<ver>`
+  and `:latest` top-level digest must equal the source `:<ver>-rc<n>` digest,
+  or the promote fails. Codifies the copy-only bit-identical guarantee that was
+  previously only verified by hand after each release.
+
+### Changed
+- Release pipeline no longer xz-compresses the `-oci` archives; the
+  `<variant>-<ver>-oci.tar` (plain tar) is now the release attachment instead
+  of `-oci.txz`. The OCI layer blobs are already gzip-compressed, so the
+  `xz -9 -T0` pass cost significant CI time for negligible size gain. Plain
+  `.tar` is ~the same size at zero compression cost. `podman load` accepts the
+  `.tar` directly. Note: this changes the release-asset extension
+  (`-oci.txz` -> `-oci.tar`).
+
 ## [1.7.2] — 2026-06-07
 
 ### Fixed

@@ -245,7 +245,7 @@ same rootfs work directory in a single build invocation:
 
 Tagged releases (from 1.5.1 onward) publish the OCI image to GHCR at
 `ghcr.io/doctorjei/gemet/yggdrasil:<ver>` (and `:latest`), and the
-.txz + qcow2 + `-oci.txz` forms as GitHub Release attachments. Earlier
+.txz + qcow2 + `-oci.tar` forms as GitHub Release attachments. Earlier
 versions (≤ 1.5.0) remain at
 `ghcr.io/doctorjei/tenkei/yggdrasil:<ver>`. See
 [releases.md](releases.md) for pull commands and the full artifact
