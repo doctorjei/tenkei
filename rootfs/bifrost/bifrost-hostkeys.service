@@ -1,6 +1,6 @@
 [Unit]
 Description=Generate SSH host keys if missing
-Before=ssh.service ssh.socket
+Before=ssh.service
 After=local-fs.target
 
 [Service]

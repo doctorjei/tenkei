@@ -40,7 +40,7 @@ boot by `bifrost-hostkeys.service`:
 ```ini
 [Unit]
 Description=Generate SSH host keys if missing
-Before=ssh.service ssh.socket
+Before=ssh.service
 After=local-fs.target
 
 [Service]
@@ -54,8 +54,14 @@ WantedBy=multi-user.target
 
 `ssh-keygen -A` only creates host keys that don't already exist, so
 the unit is safe to run on every boot — after the first boot it's a
-no-op. The ordering (`Before=ssh.service ssh.socket`) guarantees sshd
-never starts before keys are in place.
+no-op. The ordering (`Before=ssh.service`) guarantees the sshd daemon
+never starts before keys are in place. It deliberately does *not*
+order before `ssh.socket`: the socket merely listens (it needs no key
+material to bind), and ordering a `multi-user`-wanted service before
+`ssh.socket` closes a dependency cycle
+(`ssh.socket`→`sockets.target`→`basic.target`→ this service →
+`ssh.socket`) that systemd resolves by dropping `sockets.target` —
+fixed in v1.7.0.
 
 Debian's openssh-server also ships its own `sshd-keygen.service`
 (`ConditionFirstBoot=yes`, also runs `ssh-keygen -A`) which is wanted
@@ -93,12 +99,14 @@ container, and `bifrost-sshkey-sync.service` will merge them into
 
 ```ini
 [Unit]
-Before=ssh.service ssh.socket
+Before=ssh.service
 After=local-fs.target
 ```
 
 Soft ordering — if ssh.service isn't scheduled for some reason, the
-sync still runs. The unit is `WantedBy=multi-user.target`, so it
+sync still runs. (Ordered before `ssh.service` only, not `ssh.socket`
+— see the host-keys section for why ordering before the socket would
+create a dependency cycle.) The unit is `WantedBy=multi-user.target`, so it
 fires during normal boot regardless of sshd state.
 
 ## Usage

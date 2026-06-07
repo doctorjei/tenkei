@@ -4,7 +4,7 @@
 [Unit]
 Description=Bifrost SSH authorized_keys sync
 ConditionPathExists=/etc/bifrost/authorized_keys
-Before=ssh.service ssh.socket
+Before=ssh.service
 After=local-fs.target
 
 [Service]

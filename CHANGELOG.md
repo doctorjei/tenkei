@@ -7,6 +7,15 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [1.7.0] — 2026-06-07
 
 ### Fixed
+- Bifrost `bifrost-hostkeys.service` and `bifrost-sshkey-sync.service`
+  no longer order `Before=ssh.socket` — only `Before=ssh.service`.
+  Ordering a `multi-user.target`-wanted service before `ssh.socket`
+  closed a dependency cycle (`ssh.socket`→`sockets.target`→
+  `basic.target`→service→`ssh.socket`) that systemd broke by deleting
+  `sockets.target/start` on every boot. SSH still came up, so it was
+  invisible to `systemctl --failed`, but it was fragile and noisy. The
+  socket needs no host-key material to bind; ordering before the
+  daemon (`ssh.service`) is sufficient.
 - busybox canonical-inversion fill-in shims now land in
   `/usr/bin/<applet>` instead of the rootfs root. `build-yggdrasil.sh`
   laid the busybox applet stage out flat and mapped each entry to
