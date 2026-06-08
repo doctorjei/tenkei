@@ -220,6 +220,7 @@ dbus-daemon
 dbus-system-bus-common
 dbus-session-bus-common
 libkmod2
+apparmor
 libapparmor1
 libnss-myhostname
 init

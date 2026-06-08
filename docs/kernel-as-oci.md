@@ -155,6 +155,31 @@ of AppArmor; with no policy shipped it errored on every boot while AppArmor
 never initialized. Setting `CONFIG_LSM` with apparmor as the only major
 makes AppArmor active and keeps SELinux dormant-but-re-enablable at boot.
 
+AppArmor is active in the kernel, and yggdrasil and bifrost ship the
+`apparmor_parser` binary (the `apparmor` package is retained) while **masking
+`apparmor.service`** so the package's ~90 bundled `/etc/apparmor.d` profiles are
+not loaded at boot. The result is still inert: AppArmor is active but no profile
+is applied until a consumer parses one on demand. Keeping the parser without
+auto-enforcing the bundled set keeps the base minimal in behavior while making
+the tool available where a runtime needs it. Canopy is the exception — as the
+no-init OCI payload it re-purges `apparmor` and stays parser-less; its LXC-host
+consumer brings the parser via PVE.
+
+This matters for hosts that run containers. A container runtime that applies an
+AppArmor profile needs the userspace parser (`apparmor_parser`). LXC with
+`lxc.apparmor.profile = generated` (PVE's default) shells out to the parser at
+container start, independent of `apparmor.service`. Because yggdrasil and bifrost
+ship the parser, `generated` now works out of the box on such a host — no
+hard-fail. The underlying issue is still an LXC-side gap: the `apparmor` package
+is only a `Recommends` of `lxc`, yet the `generated` path hard-requires it. A
+parser-less host therefore still aborts at LSM init with `Cannot use generated
+profile: apparmor_parser not available` (it does not fall back to unconfined) —
+e.g. after `apt-get install --no-install-recommends lxc`, or on a canopy-derived
+host. The fixes there are downstream: install `lxc` with recommends enabled
+(which pulls `apparmor`), or set `lxc.apparmor.profile = unconfined`. gemet
+shipping the parser in yggdrasil and bifrost is a courtesy that removes the
+footgun for the common case, not an obligation of the base.
+
 All overlay options are builtin (`=y`), never modules: gemet ships only
 `vmlinuz` + initramfs (`kernel/Containerfile` is `FROM scratch` + COPY of
 the two boot files; the build has no `make modules_install` and no

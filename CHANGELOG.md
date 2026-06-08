@@ -7,6 +7,18 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Yggdrasil and bifrost now ship `apparmor_parser` (the `apparmor` package is
+  retained) with `apparmor.service` masked so the package's ~90 bundled
+  `/etc/apparmor.d` profiles are not auto-enforced at boot. AppArmor still loads
+  inert (no profile applied) until a consumer parses one on demand, but the
+  parser is now available — so LXC `lxc.apparmor.profile = generated` (PVE's
+  default) works on a yggdrasil/bifrost host instead of hard-failing with
+  `apparmor_parser not available`. The `generated` path invokes the parser at
+  container start independent of the masked service. Canopy re-purges `apparmor`
+  and stays parser-less (its LXC-host consumer brings the parser via PVE). This
+  is a behavior and size change: +~3MB uncompressed to yggdrasil and bifrost.
+  The underlying `apparmor`-is-only-a-`Recommends`-of-`lxc` gap is unchanged
+  upstream; gemet shipping the parser removes the footgun for the common case.
 - `scripts/kernel-selftest.sh`: boots a composed gemet image as a nested VM via
   kento on a KVM-capable host and asserts the shipped kernel-config opinions
   (/dev/kvm, nbd/drbd, AppArmor-active LSM with no SELinux policy error, evdev,

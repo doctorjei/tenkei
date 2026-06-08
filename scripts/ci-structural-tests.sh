@@ -203,10 +203,13 @@ else
             fail "could not read uncompressed size from xz -l"
         else
             MB=$((uncompressed / 1024 / 1024))
-            if (( MB >= 200 && MB <= 280 )); then
-                pass ".txz OK, uncompressed ${MB} MB (within 200-280 MB)"
+            # Upper bound carries headroom for the retained apparmor
+            # package (apparmor_parser kept for LXC 'generated'; +~3MB
+            # uncompressed over the pre-A2 image).
+            if (( MB >= 200 && MB <= 285 )); then
+                pass ".txz OK, uncompressed ${MB} MB (within 200-285 MB)"
             else
-                fail "uncompressed size ${MB} MB outside 200-280 MB bounds"
+                fail "uncompressed size ${MB} MB outside 200-285 MB bounds"
             fi
         fi
     fi
@@ -392,8 +395,10 @@ else
                 fi
             done
 
-            if (( MB < 200 || MB > 290 )); then
-                bad+=" size-${MB}MB-outside-200-290"
+            # Upper bound carries headroom for the retained apparmor
+            # package inherited from yggdrasil (+~3MB uncompressed).
+            if (( MB < 200 || MB > 295 )); then
+                bad+=" size-${MB}MB-outside-200-295"
             fi
 
             if [[ -z "$bad" ]]; then

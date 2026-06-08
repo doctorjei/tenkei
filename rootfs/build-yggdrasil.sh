@@ -8,7 +8,10 @@
 #
 # Phases:
 #   0. Kernel/boot purge + Yggdrasil-specific drop list (grub, cloud-init,
-#      polkit, resolved/timesyncd, apparmor, vim, ...). Matches 1.1.0.
+#      polkit, resolved/timesyncd, vim, ...). Matches 1.1.0. The apparmor
+#      package is retained (apparmor_parser kept for LXC 'generated'); its
+#      apparmor.service is masked in setup.sh so bundled profiles do not
+#      auto-enforce.
 #   1. BusyBox swap: install busybox, repoint /bin/sh at bash, purge 18
 #      packages (hostname/iputils-ping/gzip/cpio/sed/coreutils/grep/findutils/
 #      diffutils/less/wget/kmod/netcat-openbsd/traceroute/fdisk/psmisc/
@@ -92,7 +95,7 @@ PURGE_PACKAGES=(
 YGGDRASIL_STRIP_PACKAGES=(
     cloud-init cloud-guest-utils cloud-image-utils cloud-utils polkitd
     libpolkit-agent-1-0 libpolkit-gobject-1-0
-    systemd-timesyncd unattended-upgrades dmsetup apparmor screen qemu-utils
+    systemd-timesyncd unattended-upgrades dmsetup screen qemu-utils
     dosfstools gdisk genisoimage dhcpcd-base reportbug python3-reportbug
     python3-debianbts apt-listchanges ssh-import-id bind9-host bind9-libs
     vim vim-common vim-runtime
@@ -649,6 +652,22 @@ systemctl enable systemd-resolved.service
 # boot. Downstream tiers drop keys into /etc/ssh/ and re-enable via
 # 'systemctl enable ssh'. See docs/yggdrasil.md.
 systemctl disable ssh.service ssh.socket 2>/dev/null || true
+
+# AppArmor (Option A2): yggdrasil keeps the apparmor package so the
+# apparmor_parser binary is available on demand — notably for LXC hosts
+# running 'lxc.apparmor.profile = generated', which shells out to the
+# parser at container start. We do NOT want the package's ~90 bundled
+# /etc/apparmor.d profiles auto-enforced on a minimal image, so mask
+# apparmor.service (the boot-time profile loader). Masking is stronger
+# than disable: the unit can't start even as a dependency. We mask via a
+# direct symlink to /dev/null at the unit's path rather than 'systemctl
+# mask' so the result is deterministic regardless of dbus availability in
+# the chroot. apparmor.service ships under /usr/lib/systemd/system (Debian
+# convention), NOT /lib. LXC 'generated' invokes the parser directly and
+# is unaffected by the masked service.
+if [[ -e /usr/lib/systemd/system/apparmor.service ]]; then
+    ln -sf /dev/null /etc/systemd/system/apparmor.service
+fi
 
 # Locale generation and locales-package purge happen INSIDE strip.sh
 # (before Phase 1) because locales postinst needs real coreutils ln -r.
