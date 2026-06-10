@@ -259,8 +259,13 @@ Key requirements for a VM-bootable image:
   match is narrowed to `Name=en* eth*` (primary NICs) rather than
   `Type=ether` so it never claims LXC/bridge veth interfaces. The gemet
   base images additionally ship a `10-lxc-veth-unmanaged.network`
-  drop-in (`[Match] Kind=veth` / `[Link] Unmanaged=yes`) as a
-  belt-and-braces guard when the image is used as an LXC host.
+  drop-in (`[Match] Name=veth*` / `[Link] Unmanaged=yes`) as a
+  belt-and-braces guard when the image is used as an LXC host. The match
+  is by name (`veth*`), not `Kind=veth`: inside an LXC *guest* the
+  guest's own uplink `eth0` is itself a veth, so a `Kind` match would
+  unmanage `eth0` and its address config would never apply — host-side
+  bridge veths are named `veth*`, so this guards the LXC-host case
+  without touching a guest's primary NIC.
 - `udev` and `systemd-sysv` installed for full systemd boot
 
 ## Kernel as OCI image

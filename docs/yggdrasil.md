@@ -131,7 +131,7 @@ authoritative package lists):
 - `systemd-timesyncd` (DNS is handled by `systemd-resolved`, which is
   kept and enabled; `/etc/resolv.conf` is a symlink to the resolved
   stub at `/run/systemd/resolve/stub-resolv.conf`)
-- `unattended-upgrades`, `dmsetup`, `apparmor`
+- `unattended-upgrades`, `dmsetup`
 - `screen`, `qemu-utils`, `dosfstools`, `gdisk`, `genisoimage`
 - `dhcpcd-base` (redundant with networkd)
 - `reportbug`, `python3-reportbug`, `python3-debianbts`,
@@ -140,6 +140,14 @@ authoritative package lists):
 - `bind9-host`, `bind9-libs` (`host`/`dig` not foundational; `ping` and
   name resolution still work via libc's `getaddrinfo`)
 - `vim`, `vim-common`, `vim-runtime` (replaced by `vim-tiny`)
+
+**Retained — AppArmor parser** (v1.7.3+): the `apparmor` package (and
+`apparmor_parser`) is kept, with `apparmor.service` masked so the ~90
+bundled profiles do not auto-enforce. This lets LXC
+`lxc.apparmor.profile = generated` (PVE's default) work on a
+yggdrasil/bifrost host instead of hard-failing on a missing parser.
+Canopy re-purges it and stays parser-less. See
+[kernel-as-oci.md](kernel-as-oci.md) for the full rationale.
 
 **Dropped — BusyBox swap** (Phase 1):
 
