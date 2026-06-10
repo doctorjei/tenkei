@@ -6,6 +6,8 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.7.3] — 2026-06-10
+
 ### Added
 - Yggdrasil and bifrost now ship `apparmor_parser` (the `apparmor` package is
   retained) with `apparmor.service` masked so the package's ~90 bundled
