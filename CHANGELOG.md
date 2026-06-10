@@ -29,6 +29,9 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or the promote fails. Codifies the copy-only bit-identical guarantee that was
   previously only verified by hand after each release.
 
+### Fixed
+- networkd: scope the LXC veth-unmanaged guard to `Name=veth*` (was `Kind=veth`), which wrongly matched a guest's own `eth0` (veth-kind inside LXC) and left it unmanaged with no network. Host-side bridge-veth protection is unchanged.
+
 ### Changed
 - Release pipeline no longer xz-compresses the `-oci` archives; the
   `<variant>-<ver>-oci.tar` (plain tar) is now the release attachment instead
