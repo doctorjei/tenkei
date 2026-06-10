@@ -10,9 +10,10 @@
 #
 # Audience: no-init process containers. Downstream consumers bring
 # their own pid1 (tini, dumb-init, s6-overlay, etc.) or run as plain
-# processes. Canopy keeps apt, bash, coreutils-via-busybox, and the
-# shared-library floor (libsystemd0, libudev1, libpam*) — those can't
-# be removed without breaking package management.
+# processes. Canopy keeps apt, bash, coreutils-via-busybox, the
+# apparmor parser (for LXC-host consumers), and the shared-library
+# floor (libsystemd0, libudev1, libpam*) — those can't be removed
+# without breaking package management.
 #
 # Preconditions:
 #   - build/yggdrasil-<VERSION>.txz must exist (from `rootfs/build-yggdrasil.sh`)
@@ -196,6 +197,15 @@ echo "Packages before purge: $(dpkg -l | grep '^ii' | wc -l)"
 # Fresh lists for the purge solver.
 apt-get update
 
+# Retain the apparmor parser in canopy (pulled forward from the derive-chain
+# inversion). apparmor may be auto-marked in the inherited yggdrasil rootfs, so
+# pin it manual before the autoremove pass below can reap it; its dependency
+# libapparmor1 is then held transitively. apparmor.service is irrelevant here
+# (canopy has no pid1 and rm -rf's /etc/systemd later); the ~90 bundled
+# /etc/apparmor.d profiles ship inert. The parser is available for an LXC-host
+# consumer's 'lxc.apparmor.profile = generated'.
+if dpkg -s apparmor &>/dev/null; then apt-mark manual apparmor; fi
+
 # Helper: filter an input list down to only packages that are installed.
 filter_installed() {
     local src="$1" dst="$2"
@@ -220,8 +230,6 @@ dbus-daemon
 dbus-system-bus-common
 dbus-session-bus-common
 libkmod2
-apparmor
-libapparmor1
 libnss-myhostname
 init
 init-system-helpers

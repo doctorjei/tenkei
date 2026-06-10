@@ -146,7 +146,8 @@ authoritative package lists):
 bundled profiles do not auto-enforce. This lets LXC
 `lxc.apparmor.profile = generated` (PVE's default) work on a
 yggdrasil/bifrost host instead of hard-failing on a missing parser.
-Canopy re-purges it and stays parser-less. See
+Canopy now retains the parser as well (pulled forward from the eventual
+derive-chain inversion), so the same `generated` path works there too. See
 [kernel-as-oci.md](kernel-as-oci.md) for the full rationale.
 
 **Dropped — BusyBox swap** (Phase 1):

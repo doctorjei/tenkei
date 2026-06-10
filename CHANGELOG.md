@@ -6,6 +6,24 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Kernel overlay (`kernel/config/x86_64/gemet.conf`) sets
+  `CONFIG_PSI_DEFAULT_DISABLED=n` so PSI is active at boot and
+  `/proc/pressure/` exists without a `psi=1` cmdline. Kata's base compiled PSI
+  in (`CONFIG_PSI=y`) but left it runtime-disabled. Restores PVE pressure
+  reporting and silences `qm status` "uninitialized value" Perl warnings on a
+  gemet-kernel host. This is the overlay's first `=n` line, so the build-time
+  overlay assertion in `scripts/build-kernel.sh` now also accepts the kconfig
+  comment form (`# CONFIG_X is not set`) that `olddefconfig` writes for a
+  disabled bool.
+
+### Changed
+- Canopy now retains the `apparmor` package / `apparmor_parser` (previously
+  re-purged — canopy was parser-less). Brings canopy in line with yggdrasil and
+  bifrost so an LXC-host consumer's `lxc.apparmor.profile = generated` works
+  without bringing its own parser. ~+3MB uncompressed. Pulled forward from the
+  eventual derive-chain inversion.
+
 ## [1.7.3] — 2026-06-10
 
 ### Added

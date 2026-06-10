@@ -131,6 +131,9 @@ CONFIG_BLK_DEV_DRBD=y
 CONFIG_AUDIT=y
 CONFIG_SECURITY_APPARMOR=y
 CONFIG_LSM="landlock,lockdown,yama,loadpin,safesetid,integrity,apparmor"
+
+# PSI active at boot so /proc/pressure exists (PVE pressure reporting / qm status)
+CONFIG_PSI_DEFAULT_DISABLED=n
 ```
 
 `CONFIG_INPUT_EVDEV` exists because Kata's target use case (kata-agent
@@ -155,37 +158,49 @@ of AppArmor; with no policy shipped it errored on every boot while AppArmor
 never initialized. Setting `CONFIG_LSM` with apparmor as the only major
 makes AppArmor active and keeps SELinux dormant-but-re-enablable at boot.
 
+`CONFIG_PSI_DEFAULT_DISABLED=n` makes pressure stall information active at
+boot. Kata compiles PSI in (`CONFIG_PSI=y`) but leaves it runtime-disabled,
+so `/proc/pressure/` is absent unless the cmdline carries `psi=1`; PVE's
+`qm status` then reads undef for the per-VM pressure fields and emits
+"uninitialized value" Perl warnings. Flipping the default off restores
+`/proc/pressure/` without a `psi=1` cmdline.
+
 AppArmor is active in the kernel, and yggdrasil and bifrost ship the
 `apparmor_parser` binary (the `apparmor` package is retained) while **masking
 `apparmor.service`** so the package's ~90 bundled `/etc/apparmor.d` profiles are
 not loaded at boot. The result is still inert: AppArmor is active but no profile
 is applied until a consumer parses one on demand. Keeping the parser without
 auto-enforcing the bundled set keeps the base minimal in behavior while making
-the tool available where a runtime needs it. Canopy is the exception — as the
-no-init OCI payload it re-purges `apparmor` and stays parser-less; its LXC-host
-consumer brings the parser via PVE.
+the tool available where a runtime needs it. Canopy retains the parser too
+(pulled forward from the eventual derive-chain inversion): as a no-init OCI
+payload it has no `apparmor.service` to mask, but keeping the `apparmor` package
+lets an LXC-host consumer's `lxc.apparmor.profile = generated` work without
+bringing its own parser.
 
 This matters for hosts that run containers. A container runtime that applies an
 AppArmor profile needs the userspace parser (`apparmor_parser`). LXC with
 `lxc.apparmor.profile = generated` (PVE's default) shells out to the parser at
-container start, independent of `apparmor.service`. Because yggdrasil and bifrost
-ship the parser, `generated` now works out of the box on such a host — no
-hard-fail. The underlying issue is still an LXC-side gap: the `apparmor` package
+container start, independent of `apparmor.service`. Because yggdrasil, bifrost,
+and canopy ship the parser, `generated` now works out of the box on such a host
+— no hard-fail. The underlying issue is still an LXC-side gap: the `apparmor` package
 is only a `Recommends` of `lxc`, yet the `generated` path hard-requires it. A
 parser-less host therefore still aborts at LSM init with `Cannot use generated
 profile: apparmor_parser not available` (it does not fall back to unconfined) —
-e.g. after `apt-get install --no-install-recommends lxc`, or on a canopy-derived
-host. The fixes there are downstream: install `lxc` with recommends enabled
+e.g. after `apt-get install --no-install-recommends lxc` on a host that lacks
+the parser. The fixes there are downstream: install `lxc` with recommends enabled
 (which pulls `apparmor`), or set `lxc.apparmor.profile = unconfined`. gemet
-shipping the parser in yggdrasil and bifrost is a courtesy that removes the
-footgun for the common case, not an obligation of the base.
+shipping the parser across yggdrasil, bifrost, and canopy is a courtesy that
+removes the footgun for the common case, not an obligation of the base.
 
-All overlay options are builtin (`=y`), never modules: gemet ships only
+Every overlay *driver* is builtin (`=y`), never a module: gemet ships only
 `vmlinuz` + initramfs (`kernel/Containerfile` is `FROM scratch` + COPY of
 the two boot files; the build has no `make modules_install` and no
 `/lib/modules` tree). A `=m` driver would compile but never reach a
-consumer. `scripts/build-kernel.sh` asserts every overlay `CONFIG_*=` line
-survived `make olddefconfig` and fails the build if any was dropped.
+consumer. (`CONFIG_PSI_DEFAULT_DISABLED=n` is a tuning default, not a
+driver — it has no module form.) `scripts/build-kernel.sh` asserts every
+overlay `CONFIG_*=` line survived `make olddefconfig` and fails the build
+if any was dropped — including, for a disabled bool, the comment form
+(`# CONFIG_X is not set`) that `olddefconfig` writes instead of `=n`.
 
 Practical consequence: gemet's `vmlinuz` is binary-compatible with the
 boot interface Kata exposes (same kernel version, same Kata configs and

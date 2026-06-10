@@ -28,7 +28,7 @@ Removed outright:
 - `udev` — device-event daemon
 - `dbus`, `dbus-bin`, `dbus-daemon`, `dbus-system-bus-common`,
   `dbus-session-bus-common` — dbus daemon + bus config
-- `libkmod2`, `libapparmor1`, `libnss-myhostname` — systemd-adjacent libs
+- `libkmod2`, `libnss-myhostname` — systemd-adjacent libs
 - `init`, `init-system-helpers`, `sysvinit-utils`, `runit-helper` —
   init meta-packages and helpers
 - `libpam-systemd`, `libdbus-1-3` — PAM and dbus client libraries
@@ -48,6 +48,15 @@ downstream `droste-seed` consumer does not need any of them.
 
 The concrete per-build list of purged packages ships inside the image
 at `/usr/share/canopy/canopy-stripped.list`.
+
+**Retained — AppArmor parser** (pulled forward from the eventual
+derive-chain inversion): Canopy keeps the `apparmor` package (and its
+`apparmor_parser` binary, plus `libapparmor1`), in line with yggdrasil
+and bifrost. This lets an LXC-host consumer's
+`lxc.apparmor.profile = generated` (PVE's default) work without bringing
+its own parser. Canopy has no pid1 and `rm -rf`s `/etc/systemd`, so
+`apparmor.service` is irrelevant here and the bundled `/etc/apparmor.d`
+profiles ship inert.
 
 ## The shared-library floor
 

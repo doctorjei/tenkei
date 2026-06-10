@@ -147,11 +147,20 @@ apply_gemet_overlay() {
         # unmet. Assert every CONFIG_*= line from the overlay survived into
         # the final .config so a dropped or renamed symbol fails the build
         # loudly instead of silently shipping a kernel missing the opinion.
-        local missing=0 cfgline
+        local missing=0 cfgline sym
         while IFS= read -r cfgline; do
             [[ "$cfgline" =~ ^CONFIG_[A-Z0-9_]+=. ]] || continue
-            grep -qxF "$cfgline" "${kernel_path}/.config" \
-                || { echo "ERROR: gemet overlay symbol dropped from final .config: $cfgline" >&2; missing=1; }
+            if [[ "$cfgline" =~ ^(CONFIG_[A-Z0-9_]+)=n$ ]]; then
+                # olddefconfig writes a disabled bool/tristate as a comment
+                # ("# CONFIG_X is not set"), not "CONFIG_X=n" — accept either.
+                sym="${BASH_REMATCH[1]}"
+                grep -qxF "# ${sym} is not set" "${kernel_path}/.config" \
+                    || grep -qxF "$cfgline" "${kernel_path}/.config" \
+                    || { echo "ERROR: gemet overlay symbol dropped from final .config: $cfgline" >&2; missing=1; }
+            else
+                grep -qxF "$cfgline" "${kernel_path}/.config" \
+                    || { echo "ERROR: gemet overlay symbol dropped from final .config: $cfgline" >&2; missing=1; }
+            fi
         done < "$gemet_frag"
         [[ "$missing" -eq 0 ]] || error \
             "gemet kernel overlay symbols were dropped by olddefconfig (unmet deps or renamed symbol)." \
