@@ -3,9 +3,11 @@
 # minus kernel/bootloader/UEFI (Phase 1 purge)
 # minus container-irrelevant (netplan, pciutils, etc.)
 # minus Yggdrasil-specific drops (cloud-*, polkit, resolved/timesyncd,
-#   unattended-upgrades, dmsetup, apparmor, screen, qemu-utils, dosfstools,
+#   unattended-upgrades, dmsetup, screen, qemu-utils, dosfstools,
 #   gdisk, genisoimage, dhcpcd-base, reportbug family, apt-listchanges,
 #   ssh-import-id, bind9-*, vim/vim-common/vim-runtime)
+# NB: apparmor is NOT dropped (A2, v1.7.3) — the apparmor package /
+#   apparmor_parser is retained; see rootfs/build-yggdrasil.sh.
 # Result: ~264 packages (plus vim-tiny and nano installed during setup)
 #
 # Kept (needed as deps for packages we want):

@@ -541,6 +541,8 @@ else
             done
 
             # Canopy size band is smaller than yggdrasil (no init-family).
+            # Upper bound carries headroom for the retained apparmor package
+            # (apparmor_parser kept for LXC 'generated'; +~3MB uncompressed).
             if (( MB < 170 || MB > 240 )); then
                 bad+=" size-${MB}MB-outside-170-240"
             fi
@@ -559,7 +561,8 @@ else
                     pkgs=$(grep -c '^Package:' "$STATUS_FILE" 2>/dev/null || echo 0)
                     # Canopy spike produced 187 (pre-1.6.0); v1.6.1 lands
                     # near 196 after the python keep-list + EXTRA_INSTALL
-                    # additions. 180-205 gives modest headroom while still
+                    # additions; retaining apparmor (+libapparmor1) nudges it
+                    # to ~198. 180-205 gives modest headroom while still
                     # catching catastrophic creep.
                     if (( pkgs < 180 || pkgs > 205 )); then
                         bad+=" dpkg-count-${pkgs}-outside-180-205"
