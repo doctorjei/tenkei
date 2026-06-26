@@ -88,17 +88,17 @@ Options:
   --size <GB>        Disk size in GB (default: rootfs + 25% + 256 MiB
                      headroom, rounded up to whole GB, minimum 1).
   --label <s>        ext4 filesystem label (default: gemet-root).
-  --use-loop         Run grub-bios-setup against a loop device (sudo
-                     losetup) instead of the raw file directly. Needed on
-                     container / fuse / overlay filesystems where GRUB
-                     cannot canonicalize the backing device of a plain
-                     file. Omit on a real-disk fs (e.g. CI runner) for a
-                     fully unprivileged build. Requires sudo + losetup.
   -h, --help         Show this help.
 
 Requires: grub-mkimage/grub-bios-setup (grub-pc-bin), sgdisk (gdisk),
-mke2fs (e2fsprogs), qemu-img (qemu-utils), fakeroot, truncate, tar, xz.
-With --use-loop also: sudo + losetup (util-linux).
+mke2fs (e2fsprogs), qemu-img (qemu-utils), fakeroot, truncate, tar, xz,
+and sudo + losetup (util-linux).
+
+grub-bios-setup requires a real block device as its target (it rejects a
+plain file: "DEVICE must be an OS device"). So this script always attaches
+the raw image to a loop device and embeds GRUB against it — there is no
+file-only path. The rootfs populate (fakeroot + mke2fs -d) is unprivileged;
+only the loop attach + mount + grub-bios-setup need sudo.
 USAGE
 }
 
@@ -110,7 +110,6 @@ VERSION=""
 OUTPUT=""
 SIZE_GB=""
 LABEL=""
-USE_LOOP=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -121,7 +120,7 @@ while [[ $# -gt 0 ]]; do
         --output)     OUTPUT="$2";    shift 2 ;;
         --size)       SIZE_GB="$2";   shift 2 ;;
         --label)      LABEL="$2";     shift 2 ;;
-        --use-loop)   USE_LOOP=1;     shift ;;
+        --use-loop)   shift ;;  # accepted for back-compat; loop is always used now
         -h|--help)    usage; exit 0 ;;
         --)           shift; break ;;
         -*)           echo "Error: unknown option: $1" >&2; usage >&2; exit 1 ;;
@@ -201,13 +200,15 @@ command -v tar             >/dev/null 2>&1 || \
 command -v xz              >/dev/null 2>&1 || \
     error "missing xz (apt install xz-utils)"
 
-# ─── Loop-mode prerequisites ──────────────────────────────────────
-if [[ -n "$USE_LOOP" ]]; then
-    command -v losetup >/dev/null 2>&1 || \
-        error "missing losetup (apt install util-linux) — needed for --use-loop"
-    sudo -n true 2>/dev/null || \
-        error "--use-loop needs passwordless sudo (for losetup + grub-bios-setup)"
-fi
+# ─── Loop prerequisites (always needed) ───────────────────────────
+# grub-bios-setup requires a real block device, so we always attach the
+# raw image to a loop device + mount its partition. Both need sudo.
+command -v losetup >/dev/null 2>&1 || \
+    error "missing losetup (apt install util-linux)"
+sudo -n true 2>/dev/null || \
+    error "this build needs passwordless sudo (loop attach + mount + grub-bios-setup)"
+[[ -e /dev/loop-control ]] || \
+    error "no /dev/loop-control — loop devices unavailable in this environment"
 
 # ─── Cleanup ──────────────────────────────────────────────────────
 SCRATCH=""
@@ -375,32 +376,27 @@ cp "$GRUB_MODDIR/boot.img" "$SCRATCH/boot.img"
 # grub-bios-setup reads the GPT, finds the EF02 BIOS-boot partition,
 # embeds core.img there, and writes boot.img into the protective-MBR
 # boot-code area.
-if [[ -n "$USE_LOOP" ]]; then
-    # On container / fuse / overlay / tmpfs filesystems GRUB cannot
-    # canonicalize the backing device of the GRUB directory (-d) — it
-    # follows the path to the fs mount source (e.g. "rootfs", "overlay")
-    # and fails. Fix: attach the raw to a loop device, MOUNT its ext4
-    # partition (a real block device that canonicalizes), and point -d at
-    # the grub dir on that mount. The ext4 itself was already populated
-    # unprivileged via mke2fs -E offset=; only this embed step needs sudo.
-    info "Attaching loop device + mounting partition for grub-bios-setup..."
-    LOOPDEV=$(sudo losetup -fP --show "$RAW")
-    [[ -n "$LOOPDEV" ]] || error "losetup failed to attach $RAW"
-    info "Loop device: $LOOPDEV"
-    MNT="$SCRATCH/mnt"
-    mkdir -p "$MNT"
-    sudo mount "${LOOPDEV}p2" "$MNT"
-    MOUNTED="$MNT"
-    # boot.img + core.img must live in the -d directory; the modules dir
-    # and grub.cfg are already baked into the ext4 at /boot/grub.
-    sudo cp "$SCRATCH/boot.img" "$SCRATCH/core.img" "$MNT/boot/grub/"
-    sudo "$GRUB_BIOS_SETUP" -d "$MNT/boot/grub" "$LOOPDEV"
-    sudo umount "$MNT"; MOUNTED=""
-    sudo losetup -d "$LOOPDEV"; LOOPDEV=""
-else
-    # Real-disk fs: write straight to the file, fully unprivileged.
-    "$GRUB_BIOS_SETUP" -d "$SCRATCH" -b boot.img -c core.img "$RAW"
-fi
+# grub-bios-setup needs a real block device as its target AND it
+# canonicalizes the backing device of its -d directory. A plain file
+# fails everywhere ("DEVICE must be an OS device" / "guessing the root
+# device failed" / "failed to get canonical path"). So: attach the raw to
+# a loop device, MOUNT its ext4 partition (a real block device), and point
+# -d at the grub dir on that mount. The ext4 was already populated
+# unprivileged via mke2fs -E offset=; only this embed step needs sudo.
+info "Attaching loop device + mounting partition for grub-bios-setup..."
+LOOPDEV=$(sudo losetup -fP --show "$RAW")
+[[ -n "$LOOPDEV" ]] || error "losetup failed to attach $RAW"
+info "Loop device: $LOOPDEV"
+MNT="$SCRATCH/mnt"
+mkdir -p "$MNT"
+sudo mount "${LOOPDEV}p2" "$MNT"
+MOUNTED="$MNT"
+# boot.img + core.img must live in the -d directory; the modules dir and
+# grub.cfg are already baked into the ext4 at /boot/grub.
+sudo cp "$SCRATCH/boot.img" "$SCRATCH/core.img" "$MNT/boot/grub/"
+sudo "$GRUB_BIOS_SETUP" -d "$MNT/boot/grub" "$LOOPDEV"
+sudo umount "$MNT"; MOUNTED=""
+sudo losetup -d "$LOOPDEV"; LOOPDEV=""
 
 # ─── Step 7: convert raw -> compressed qcow2 ──────────────────────
 info "Converting raw → compressed qcow2 at $OUTPUT..."

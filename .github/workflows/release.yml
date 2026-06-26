@@ -297,10 +297,10 @@ jobs:
           # Self-booting "whole system" disk: GPT (EF02 BIOS-boot) + GRUB
           # (grub-pc/SeaBIOS) + kernel + initramfs + bifrost rootfs, so a
           # generic VM launcher (e.g. seadog) boots it by just attaching the
-          # disk — no external -kernel. Default (unprivileged, no --use-loop)
-          # path: the runner's real-disk fs lets grub-bios-setup canonicalize
-          # the image file directly. The .txz carries uid-0 tar headers; the
-          # script populates ext4 under fakeroot so system files stay root-owned.
+          # disk — no external -kernel. The .txz carries uid-0 tar headers; the
+          # script populates ext4 under fakeroot (unprivileged) and embeds GRUB
+          # against a loop device (grub-bios-setup needs a real block device).
+          # The runner provides passwordless sudo + /dev/loop for that step.
           bash scripts/build-bootable-qcow2.sh \
             --rootfs "build/bifrost-${VERSION}.txz" \
             --kernel build/vmlinuz \
