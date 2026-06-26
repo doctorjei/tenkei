@@ -39,6 +39,11 @@ on:
         description: 'Kernel version to compile (overrides default 6.18.15)'
         required: false
         default: '6.18.15'
+      publish_dev:
+        description: 'Publish a <ver>-dev.<shortsha> + edge artifact set to GHCR (default: build/test only, no push)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write   # create GitHub Releases
@@ -108,13 +113,22 @@ jobs:
             RC_VERSION="${TAG#v}"             # 1.6.2-rc1
             VERSION="${RC_VERSION%-rc*}"      # 1.6.2
             IS_TAG_PUSH=true
+            # rc path never publishes a dev line — set safe defaults so the
+            # dev_version / publish_dev outputs always exist for later if:.
+            DEV_VERSION=""
+            PUBLISH_DEV=false
           elif [[ "$IS_DISPATCH" == "true" ]]; then
             # workflow_dispatch: derive from VERSION file. No rc suffix
-            # (we never push to GHCR on dispatch).
+            # (we never push an rc tag on dispatch). A dev line MAY be
+            # published opt-in (publish_dev input).
             VERSION="$(tr -d '[:space:]' < VERSION)"
             RC_VERSION="$VERSION"
             TAG="v${VERSION}"
             IS_TAG_PUSH=false
+            SHORTSHA="$(git rev-parse --short HEAD)"
+            DEV_VERSION="${VERSION}-dev.${SHORTSHA}"
+            PUBLISH_DEV="${{ github.event.inputs.publish_dev }}"
+            [[ "$PUBLISH_DEV" == "true" ]] || PUBLISH_DEV=false
           else
             echo "ERROR: build-and-rc reached without rc/dispatch shape" >&2
             exit 1
@@ -124,11 +138,15 @@ jobs:
           echo "RC_VERSION=$RC_VERSION"
           echo "TAG=$TAG"
           echo "IS_TAG_PUSH=$IS_TAG_PUSH"
+          echo "DEV_VERSION=$DEV_VERSION"
+          echo "PUBLISH_DEV=$PUBLISH_DEV"
           {
             echo "version=$VERSION"
             echo "rc_version=$RC_VERSION"
             echo "tag=$TAG"
             echo "is_tag_push=$IS_TAG_PUSH"
+            echo "dev_version=$DEV_VERSION"
+            echo "publish_dev=$PUBLISH_DEV"
           } >> "$GITHUB_OUTPUT"
 
       - name: Gate — VERSION matches tag
@@ -390,41 +408,73 @@ jobs:
             echo "change_reason=$CHANGE_REASON"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Log in to GHCR (on rc tag)
-        if: steps.shape.outputs.is_rc == 'true'
+      - name: Log in to GHCR (rc tag or dev publish)
+        if: steps.shape.outputs.is_rc == 'true' || (steps.shape.outputs.is_dispatch == 'true' && steps.ver.outputs.publish_dev == 'true')
         shell: bash
         run: |
           set -euo pipefail
           echo "${{ secrets.GITHUB_TOKEN }}" \
             | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Tag and push OCI images to GHCR with rc suffix only (on rc tag)
+      - name: Tag and push OCI images to GHCR (rc suffix + edge)
         if: steps.shape.outputs.is_rc == 'true'
         shell: bash
         run: |
           set -euo pipefail
           VERSION="${{ steps.ver.outputs.version }}"
           RC_VERSION="${{ steps.ver.outputs.rc_version }}"
-          # rc tag flow: push ONLY the rc-suffixed tag (e.g. :1.6.2-rc1).
-          # We do NOT push :<ver> or :latest here — those get populated
-          # by the promote job via skopeo copy when the release tag
-          # (v<ver>) is pushed.
+          # rc tag flow: push the rc-suffixed tag (e.g. :1.6.2-rc1) and
+          # move the :edge tag (every publication moves edge to the newest
+          # artifact). We do NOT push :<ver> or :latest here — those get
+          # populated by the promote job via skopeo copy when the release
+          # tag (v<ver>) is pushed.
 
           podman tag "localhost/yggdrasil:${VERSION}" \
             "ghcr.io/doctorjei/gemet/yggdrasil:${RC_VERSION}"
           podman push "ghcr.io/doctorjei/gemet/yggdrasil:${RC_VERSION}"
+          podman tag "localhost/yggdrasil:${VERSION}" \
+            "ghcr.io/doctorjei/gemet/yggdrasil:edge"
+          podman push "ghcr.io/doctorjei/gemet/yggdrasil:edge"
 
           podman tag "localhost/bifrost:${VERSION}" \
             "ghcr.io/doctorjei/gemet/bifrost:${RC_VERSION}"
           podman push "ghcr.io/doctorjei/gemet/bifrost:${RC_VERSION}"
+          podman tag "localhost/bifrost:${VERSION}" \
+            "ghcr.io/doctorjei/gemet/bifrost:edge"
+          podman push "ghcr.io/doctorjei/gemet/bifrost:edge"
 
           podman tag "localhost/canopy:${VERSION}" \
             "ghcr.io/doctorjei/gemet/canopy:${RC_VERSION}"
           podman push "ghcr.io/doctorjei/gemet/canopy:${RC_VERSION}"
+          podman tag "localhost/canopy:${VERSION}" \
+            "ghcr.io/doctorjei/gemet/canopy:edge"
+          podman push "ghcr.io/doctorjei/gemet/canopy:edge"
 
           podman tag "localhost/gemet-kernel:${VERSION}" \
             "ghcr.io/doctorjei/gemet/boot:${RC_VERSION}"
           podman push "ghcr.io/doctorjei/gemet/boot:${RC_VERSION}"
+          podman tag "localhost/gemet-kernel:${VERSION}" \
+            "ghcr.io/doctorjei/gemet/boot:edge"
+          podman push "ghcr.io/doctorjei/gemet/boot:edge"
+
+      - name: Tag and push dev images to GHCR (<ver>-dev.<sha> + edge)
+        if: steps.shape.outputs.is_dispatch == 'true' && steps.ver.outputs.publish_dev == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.version }}"
+          DEV_VERSION="${{ steps.ver.outputs.dev_version }}"
+          # Opt-in dev publish: push an immutable <ver>-dev.<shortsha> tag for
+          # traceability AND move the moving :edge tag. edge = newest published
+          # artifact of any kind (dev/rc/release), never behind :latest.
+          for pair in "yggdrasil:yggdrasil" "bifrost:bifrost" "canopy:canopy" "gemet-kernel:boot"; do
+            LOCAL="${pair%%:*}"
+            REPO="${pair##*:}"
+            podman tag "localhost/${LOCAL}:${VERSION}" "ghcr.io/doctorjei/gemet/${REPO}:${DEV_VERSION}"
+            podman push "ghcr.io/doctorjei/gemet/${REPO}:${DEV_VERSION}"
+            podman tag "localhost/${LOCAL}:${VERSION}" "ghcr.io/doctorjei/gemet/${REPO}:edge"
+            podman push "ghcr.io/doctorjei/gemet/${REPO}:edge"
+          done
 
       - name: Create DRAFT GitHub Release for rc (on rc tag)
         if: steps.shape.outputs.is_rc == 'true'
@@ -526,8 +576,15 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ steps.ver.outputs.version }}"
+          DEV_VERSION="${{ steps.ver.outputs.dev_version }}"
+          PUBLISH_DEV="${{ steps.ver.outputs.publish_dev }}"
           echo "workflow_dispatch run completed for VERSION=$VERSION."
-          echo "Skipped: GHCR push and GitHub Release creation."
+          if [[ "$PUBLISH_DEV" == "true" ]]; then
+            echo "Pushed dev line to GHCR: :${DEV_VERSION} + :edge (all four variants)."
+            echo "Skipped: GitHub Release creation (dev publish is GHCR-only)."
+          else
+            echo "Skipped: GHCR push and GitHub Release creation."
+          fi
           echo "Built + tested artifacts:"
           ls -l \
             build/vmlinuz \
@@ -634,13 +691,17 @@ jobs:
             SRC="docker://ghcr.io/doctorjei/gemet/${variant}:${RC_VERSION}"
             DST_VER="docker://ghcr.io/doctorjei/gemet/${variant}:${VERSION}"
             DST_LATEST="docker://ghcr.io/doctorjei/gemet/${variant}:latest"
-            echo "── Promoting ${variant}: ${RC_VERSION} -> ${VERSION} + latest"
+            DST_EDGE="docker://ghcr.io/doctorjei/gemet/${variant}:edge"
+            echo "── Promoting ${variant}: ${RC_VERSION} -> ${VERSION} + latest + edge"
             skopeo copy --all \
               --src-creds "$CREDS" --dest-creds "$CREDS" \
               "$SRC" "$DST_VER"
             skopeo copy --all \
               --src-creds "$CREDS" --dest-creds "$CREDS" \
               "$SRC" "$DST_LATEST"
+            skopeo copy --all \
+              --src-creds "$CREDS" --dest-creds "$CREDS" \
+              "$SRC" "$DST_EDGE"
           done
 
       - name: Assert promoted images are bit-identical to rc (digest gate)
@@ -663,6 +724,10 @@ jobs:
           fail=0
           for variant in yggdrasil bifrost canopy boot; do
             base="docker://ghcr.io/doctorjei/gemet/${variant}"
+            # :edge is set by the copy step above but intentionally NOT asserted
+            # here — it is a volatile, moving tag (dev/rc publishes overwrite it),
+            # so gating on it could false-fail a promote if another run moves edge
+            # mid-promote. The gate protects only the durable release tags.
             src="$(skopeo inspect --creds "$CREDS" --format '{{.Digest}}' "${base}:${RC_VERSION}")"
             ver="$(skopeo inspect --creds "$CREDS" --format '{{.Digest}}' "${base}:${VERSION}")"
             lat="$(skopeo inspect --creds "$CREDS" --format '{{.Digest}}' "${base}:latest")"
