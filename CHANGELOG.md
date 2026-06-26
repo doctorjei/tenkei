@@ -6,6 +6,20 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `scripts/build-bootable-qcow2.sh` builds a self-booting "whole system" bifrost
+  qcow2: a GPT disk (EF02 BIOS-boot partition) with GRUB (grub-pc/SeaBIOS), the
+  kernel, the initramfs, and the bifrost rootfs all baked in, so a generic VM
+  launcher boots it by attaching the disk alone — no external `-kernel`/`-initrd`.
+  The release pipeline builds it after the bifrost rootfs and attaches
+  `bifrost-boot-<ver>.qcow2` to the rc draft Release (carried into the promoted
+  release). The rootfs is populated under `fakeroot` (root-owned system files
+  without real root) via `mke2fs -d -E offset=`; GRUB is embedded with
+  `grub-bios-setup`. On a real-disk filesystem (CI runner) the build is fully
+  unprivileged; on container/fuse/overlay filesystems use `--use-loop` (mounts the
+  ext4 partition on a loop device so GRUB can canonicalize the target). Intended
+  for booting under seadog as a VM for kernel self-test.
+
 ## [1.8.0] — 2026-06-26
 
 ### Added

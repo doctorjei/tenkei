@@ -178,14 +178,20 @@ jobs:
           # - qemu-utils: qemu-img (qcow2 build)
           # - podman: OCI build + save + GHCR push + Tier 2 systemd-in-OCI test
           # - jq, curl: JSON + downloads
+          # - grub-pc-bin, grub-common, gdisk, fakeroot: self-booting whole-
+          #   system bifrost qcow2 (scripts/build-bootable-qcow2.sh). The GH
+          #   runner root fs is a real disk, so the default unprivileged
+          #   grub-bios-setup-on-file path works (no --use-loop / no loop dev).
           sudo apt-get install -y --no-install-recommends \
             busybox-static cpio gzip xz-utils zstd \
             e2fsprogs \
             qemu-utils \
             podman \
             jq \
-            curl
-          for bin in debugfs mkfs.ext4 qemu-img podman busybox cpio jq curl zstd; do
+            curl \
+            grub-pc-bin grub-common gdisk fakeroot
+          for bin in debugfs mkfs.ext4 qemu-img podman busybox cpio jq curl zstd \
+                     sgdisk grub-mkimage fakeroot; do
             command -v "$bin" >/dev/null || { echo "ERROR: missing $bin after apt install"; exit 1; }
           done
 
@@ -282,6 +288,29 @@ jobs:
           ls -l "build/bifrost-${VERSION}.txz" "build/bifrost-${VERSION}.qcow2"
           podman image exists "localhost/bifrost:${VERSION}" \
             || { echo "ERROR: bifrost OCI image was not imported"; exit 1; }
+
+      - name: Build self-booting bifrost qcow2 (whole-system, kernel baked)
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.version }}"
+          # Self-booting "whole system" disk: GPT (EF02 BIOS-boot) + GRUB
+          # (grub-pc/SeaBIOS) + kernel + initramfs + bifrost rootfs, so a
+          # generic VM launcher (e.g. seadog) boots it by just attaching the
+          # disk — no external -kernel. Default (unprivileged, no --use-loop)
+          # path: the runner's real-disk fs lets grub-bios-setup canonicalize
+          # the image file directly. The .txz carries uid-0 tar headers; the
+          # script populates ext4 under fakeroot so system files stay root-owned.
+          bash scripts/build-bootable-qcow2.sh \
+            --rootfs "build/bifrost-${VERSION}.txz" \
+            --kernel build/vmlinuz \
+            --initramfs build/gemet-initramfs.img \
+            --version "$VERSION" \
+            --output "build/bifrost-boot-${VERSION}.qcow2"
+          # Sanity: a valid qcow2 with the expected virtual size.
+          qemu-img info "build/bifrost-boot-${VERSION}.qcow2" | grep -q 'file format: qcow2' \
+            || { echo "ERROR: bifrost-boot qcow2 is not a valid qcow2"; exit 1; }
+          ls -l "build/bifrost-boot-${VERSION}.qcow2"
 
       - name: Build canopy rootfs (.txz + qcow2 + OCI import)
         shell: bash
@@ -499,6 +528,7 @@ jobs:
             "build/bifrost-${VERSION}.txz"
             "build/bifrost-${VERSION}.qcow2"
             "build/bifrost-${VERSION}-oci.tar"
+            "build/bifrost-boot-${VERSION}.qcow2"
             "build/canopy-${VERSION}.txz"
             "build/canopy-${VERSION}.qcow2"
             "build/canopy-${VERSION}-oci.tar"
@@ -595,6 +625,7 @@ jobs:
             "build/bifrost-${VERSION}.txz" \
             "build/bifrost-${VERSION}.qcow2" \
             "build/bifrost-${VERSION}-oci.tar" \
+            "build/bifrost-boot-${VERSION}.qcow2" \
             "build/canopy-${VERSION}.txz" \
             "build/canopy-${VERSION}.qcow2" \
             "build/canopy-${VERSION}-oci.tar" \
