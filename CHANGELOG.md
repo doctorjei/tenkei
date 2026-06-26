@@ -6,6 +6,8 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-06-26
+
 ### Added
 - Kernel overlay (`kernel/config/x86_64/gemet.conf`) sets
   `CONFIG_PSI_DEFAULT_DISABLED=n` so PSI is active at boot and
@@ -16,6 +18,15 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   overlay assertion in `scripts/build-kernel.sh` now also accepts the kconfig
   comment form (`# CONFIG_X is not set`) that `olddefconfig` writes for a
   disabled bool.
+- Release pipeline now publishes a moving `:edge` tag (the newest published
+  artifact of any kind — dev, rc, or release) and supports an opt-in pre-release
+  `-dev` line: a `workflow_dispatch` with `publish_dev: true` pushes
+  `<ver>-dev.<shortsha>` plus `:edge` for all four images (`boot`, yggdrasil,
+  bifrost, canopy). Default dispatches stay build-and-test only (no publish). The
+  rc-push and promote steps also move `:edge`, keeping it at or ahead of
+  `:latest`; `:edge` is set on promote but intentionally excluded from the
+  bit-identical digest gate (it is a volatile, moving tag). Enables downstream
+  test provisioning of bleeding-edge kernels without cutting a release.
 
 ### Changed
 - Canopy now retains the `apparmor` package / `apparmor_parser` (previously
